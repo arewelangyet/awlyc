@@ -1,6 +1,6 @@
 ## General Information
 
-Each file can contains at most one singular ['value'](#Values) which will serve as the entry-point to construct the declarative tree if the parser is ran directly against that file.\ 
+Each file can contains at most one singular ['value'](#Values) which will serve as the entry-point to construct the declarative tree if the parser is ran directly against that file.
 
 In addition to the one value; a file can contain an arbitrary amount of [imports](#Imports) and [functions](#Functions)
 
@@ -55,8 +55,8 @@ Would construct the following value
 import helper "helper_functions.awlyc"
 ```
 
-Any functions declared inside the imported file can now also be used by using the qualified path `helper.myFunction()`\ 
+Any functions declared inside the imported file can now also be used by using the qualified path `helper.myFunction()`
   
-Circular imports are allowed\ 
+Circular imports are allowed
   
 A file does not expose it's own imports. So; you cannot import a file *through* another file.
