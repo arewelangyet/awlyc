@@ -64,7 +64,7 @@ A file does not expose it's own imports. So; you cannot import a file *through* 
 ## Complete Example
 
 ```python
-import parsing "pages.awlyc"
+import parsing "parsing.awlyc"
 import interning "interning.awlyc"
 
 fn host():
