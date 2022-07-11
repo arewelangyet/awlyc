@@ -60,3 +60,36 @@ Any functions declared inside the imported file can now also be used by using th
 Circular imports are allowed
   
 A file does not expose it's own imports. So; you cannot import a file *through* another file.
+
+## Complete Example
+
+```python
+import parsing "pages.awlyc"
+import interning "interning.awlyc"
+
+fn host():
+  "https://arewelangyet.com/"
+
+fn linkTo(path):
+  # I guess we want to provide some builtins like this one?
+  concat(host(), path)
+
+[
+  {
+    category: "Parsing & Lexing",
+    link: linkTo("parsing"),
+    pages: [
+      parsing.logos(),
+      parsing.lalrpop(),
+      parsing.chumsky()
+    ]
+  },
+  {
+    category: "String Interning",
+    link: linkTo("interning"),
+    pages: [
+      interning.lasso()
+    ]
+  }
+]
+```
