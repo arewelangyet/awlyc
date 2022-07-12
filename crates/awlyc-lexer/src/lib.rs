@@ -48,6 +48,8 @@ pub struct Token {
 pub enum TokenKind {
     #[token("fn")]
     Fn,
+    #[token("import")]
+    Import,
     #[token("(")]
     LParen,
     #[token(")")]
@@ -66,6 +68,10 @@ pub enum TokenKind {
     Colon,
     #[token("\"")]
     DoubleQuote,
+    #[token("+")]
+    Plus,
+    #[token(".")]
+    Period,
 
     #[regex("[A-Za-z_][A-Za-z0-9_]*")]
     Ident,

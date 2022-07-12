@@ -1,9 +1,10 @@
 use std::iter::Peekable;
 
-use ast::{Expr, FnDecl, FnParam, FnParams};
+use ast::{Expr, FnDecl, FnParam, FnParams, ImportDecl, Module};
 use awlyc_error::{Diagnostic, DiagnosticKind, FileId, Span};
 use awlyc_lexer::{lex, Token, TokenKind};
 use la_arena::Arena;
+use text_size::TextRange;
 
 mod ast;
 mod decl;
@@ -11,22 +12,24 @@ mod expr;
 
 const GLOBAL_RECOVERY_SET: &[TokenKind] = &[TokenKind::Fn];
 
-struct Parser<I: Iterator<Item = Token> + Clone> {
+struct Parser<'src, I: Iterator<Item = Token> + Clone> {
     tokens: Peekable<I>,
     errors: Vec<Diagnostic>,
     /// Token kinds we expect to find are stored here to be displayed in error diagnostics
     expected_tokens: Vec<TokenKind>,
     expr_arena: Arena<Expr>,
     file_id: FileId,
+    src: &'src str,
 }
 
-impl<I: Iterator<Item = Token> + Clone> Parser<I> {
-    pub(crate) fn new(tokens: Peekable<I>, file_id: FileId) -> Self {
+impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
+    pub(crate) fn new(tokens: Peekable<I>, src: &'src str, file_id: FileId) -> Self {
         Self {
             tokens,
             errors: vec![],
             expected_tokens: vec![],
             expr_arena: Arena::default(),
+            src,
             file_id,
         }
     }
@@ -61,11 +64,12 @@ impl<I: Iterator<Item = Token> + Clone> Parser<I> {
         let range = if let Some(Token { range, .. }) = self.peek() {
             *range
         } else {
-            self.tokens
-                .clone()
-                .last()
-                .map(|Token { range, .. }| range)
-                .unwrap()
+            if let Some(range) = self.tokens.clone().last().map(|Token { range, .. }| range) {
+                range
+            } else {
+                let len = self.src.len();
+                TextRange::new(((len - 1) as u32).into(), (len as u32).into())
+            }
         };
 
         self.errors.push(Diagnostic {
@@ -105,22 +109,26 @@ impl<I: Iterator<Item = Token> + Clone> Parser<I> {
         self.peek().map_or(false, |k| set.contains(&k.kind))
     }
 
-    pub(crate) fn parse(&mut self) -> Vec<FnDecl> {
-        let mut decls = vec![];
-        while !self.at_end() {
-            if let Some(decl) = self.top_level_decl() {
-                decls.push(decl);
+    fn tok_prec(&mut self) -> i32 {
+        if let Some(tok) = self.peek() {
+            match tok.kind {
+                _ => -1,
             }
+        } else {
+            -1
         }
-        decls
+    }
+
+    pub(crate) fn parse(&mut self) -> Module {
+        self.top_level_decls()
     }
 }
 
-pub fn parse(src: &str, file_id: FileId) -> (Vec<FnDecl>, Arena<Expr>, Vec<Diagnostic>) {
+pub fn parse(src: &str, file_id: FileId) -> (Module, Arena<Expr>, Vec<Diagnostic>) {
     let tokens = lex(src).peekable();
-    let mut parser = Parser::new(tokens, file_id);
-    let decls = parser.parse();
-    (decls, parser.expr_arena, parser.errors)
+    let mut parser = Parser::new(tokens, src, file_id);
+    let module = parser.parse();
+    (module, parser.expr_arena, parser.errors)
 }
 
 #[cfg(test)]

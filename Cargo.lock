@@ -58,6 +58,7 @@ dependencies = [
  "paste",
  "smallvec",
  "smol_str",
+ "text-size",
 ]
 
 [[package]]
