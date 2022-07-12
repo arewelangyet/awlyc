@@ -1,2 +1,19 @@
-fn host(bar:
+fn some_str(foo, bar):
   "https://arewelangyet.com/"
+
+fn some_int(bar):
+  # flobby is a valid int
+  0xf1_0bb_3
+
+fn some_float():
+  103294.20193
+
+fn some_arr():
+  [0, 1.0, "hi", [10, 11]]
+
+fn some_record():
+  {
+    foo: bar,
+    bazz,
+    test: hi,
+  }

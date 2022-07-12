@@ -76,6 +76,8 @@ impl<I: Iterator<Item = Token> + Clone> Parser<I> {
                 file_id: self.file_id.clone(),
             },
         });
+
+        self.next();
     }
 
     #[inline]

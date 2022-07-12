@@ -4,6 +4,7 @@ const FN_KW_RECOVERY_SET: &[TokenKind] = &[TokenKind::Ident, TokenKind::LParen, 
 const FN_NAME_RECOVERY_SET: &[TokenKind] = &[TokenKind::LParen, TokenKind::RParen];
 const FN_PARAMS_BEGIN_RECOVERY_SET: &[TokenKind] = &[TokenKind::RParen, TokenKind::Colon];
 const FN_PARAMS_END_RECOVERY_SET: &[TokenKind] = &[TokenKind::Colon];
+const FN_PARAMS_COMMA_RECOVERY_SET: &[TokenKind] = &[TokenKind::RParen, TokenKind::Colon];
 const FN_PARAM_RECOVERY_SET: &[TokenKind] = &[TokenKind::Comma, TokenKind::RParen];
 const FN_COLON_RECOVERY_SET: &[TokenKind] = GLOBAL_RECOVERY_SET;
 
@@ -13,7 +14,6 @@ impl<I: Iterator<Item = Token> + Clone> Parser<I> {
             Some(self.fn_decl())
         } else {
             self.error(format!("expected top level declaration"));
-            self.next();
             None
         }
     }
@@ -36,12 +36,8 @@ impl<I: Iterator<Item = Token> + Clone> Parser<I> {
         while !self.at(TokenKind::RParen) && !self.at_end() {
             params.push(self.fn_param());
             if !self.at(TokenKind::RParen) {
-                if self.at(TokenKind::Comma) {
-                    self.next();
-                } else {
-                    self.error(format!("expected either `,` or `)`"));
-                    break;
-                }
+                self.expect(TokenKind::Comma, FN_PARAMS_COMMA_RECOVERY_SET);
+                params.push(self.fn_param());
             }
         }
         self.expect(TokenKind::RParen, FN_PARAMS_END_RECOVERY_SET);

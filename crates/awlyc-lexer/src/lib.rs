@@ -71,7 +71,7 @@ pub enum TokenKind {
     Ident,
 
     #[regex(r#""(?:[^"]|\\")*""#)]
-    String,
+    StringLit,
 
     #[regex("0x[0-9a-fA-F]+(_[0-9a-fA-F]+)*")]
     #[regex("0b[0-9]+(_[0-9]+)*")]
@@ -81,7 +81,7 @@ pub enum TokenKind {
     #[regex(r"[0-9]+\.[0-9]+(_[0-9]+)*")]
     FloatLit,
 
-    #[regex("#.*")]
+    #[regex("#.*", logos::skip)]
     Comment,
 
     #[regex(r"/\*([^*]|\*+[^*/])*\*?")]
