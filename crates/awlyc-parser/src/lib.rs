@@ -1,3 +1,5 @@
+use std::iter::Peekable;
+
 use ast::{Expr, FnDecl, FnParam, FnParams};
 use awlyc_error::{Diagnostic, DiagnosticKind, FileId, Span};
 use awlyc_lexer::{lex, Token, TokenKind};
@@ -7,36 +9,34 @@ mod ast;
 mod decl;
 mod expr;
 
-struct Parser<'a> {
-    tokens: &'a [Token],
+struct Parser<I: Iterator<Item = Token> + Clone> {
+    tokens: Peekable<I>,
     errors: Vec<Diagnostic>,
     /// Token kinds we expect to find are stored here to be displayed in error diagnostics
     expected_tokens: Vec<TokenKind>,
     expr_arena: Arena<Expr>,
-    idx: usize,
     file_id: FileId,
 }
 
-impl<'a> Parser<'a> {
-    pub(crate) fn new(tokens: &'a [Token], file_id: FileId) -> Self {
+impl<I: Iterator<Item = Token> + Clone> Parser<I> {
+    pub(crate) fn new(tokens: Peekable<I>, file_id: FileId) -> Self {
         Self {
             tokens,
             errors: vec![],
             expected_tokens: vec![],
             expr_arena: Arena::default(),
-            idx: 0,
             file_id,
         }
     }
 
-    fn next(&mut self) -> Option<&Token> {
+    fn next(&mut self) -> Option<Token> {
         self.expected_tokens.clear();
-        self.idx += 1;
-        self.tokens.get(self.idx)
+        self.tokens.next()
+        // self.tokens.get(self.idx)
     }
 
     fn expect(&mut self, kind: TokenKind) -> Option<Token> {
-        let tok = self.cur_tok().cloned();
+        let tok = self.peek().cloned();
         if self.at(kind) {
             self.next();
         } else {
@@ -53,11 +53,14 @@ impl<'a> Parser<'a> {
     }
 
     fn error(&mut self, msg: String) {
-        let range = if let Some(Token { range, .. }) = self.cur_tok() {
+        let range = if let Some(Token { range, .. }) = self.peek() {
             *range
         } else {
-            // if we've even started parsing it means that there are tokens, so this unwrap is safe
-            self.tokens.last().unwrap().range
+            self.tokens
+                .clone()
+                .last()
+                .map(|Token { range, .. }| range)
+                .unwrap()
         };
 
         self.errors.push(Diagnostic {
@@ -65,34 +68,34 @@ impl<'a> Parser<'a> {
             msg,
             span: Span {
                 range,
-                file_id: self.file_id.clone(), // TODO: store file ids
+                file_id: self.file_id.clone(),
             },
         });
     }
 
     #[inline]
-    fn at_end(&self) -> bool {
-        !(self.idx < self.tokens.len())
+    fn at_end(&mut self) -> bool {
+        self.tokens.peek().is_none()
     }
 
     #[inline]
-    fn cur_tok(&self) -> Option<&Token> {
-        self.tokens.get(self.idx)
+    fn peek(&mut self) -> Option<&Token> {
+        self.tokens.peek()
     }
 
     #[inline]
-    fn cur_kind(&self) -> Option<TokenKind> {
-        self.tokens.get(self.idx).map(|Token { kind, .. }| *kind)
+    fn peek_kind(&mut self) -> Option<TokenKind> {
+        self.peek().map(|Token { kind, .. }| *kind)
     }
 
     fn at(&mut self, kind: TokenKind) -> bool {
         self.expected_tokens.push(kind);
-        self.cur_kind() == Some(kind)
+        self.peek_kind() == Some(kind)
     }
 
     pub(crate) fn parse(&mut self) -> Vec<FnDecl> {
         let mut decls = vec![];
-        while self.idx < self.tokens.len() {
+        while !self.at_end() {
             if let Some(decl) = self.top_level_decl() {
                 decls.push(decl);
             }
@@ -102,8 +105,8 @@ impl<'a> Parser<'a> {
 }
 
 pub fn parse(src: &str, file_id: FileId) -> (Vec<FnDecl>, Arena<Expr>, Vec<Diagnostic>) {
-    let tokens: Vec<_> = lex(src).collect();
-    let mut parser = Parser::new(&tokens, file_id);
+    let tokens = lex(src).peekable();
+    let mut parser = Parser::new(tokens, file_id);
     let decls = parser.parse();
     (decls, parser.expr_arena, parser.errors)
 }

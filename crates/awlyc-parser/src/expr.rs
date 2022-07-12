@@ -4,7 +4,7 @@ use crate::ast::{Expr, ExprIdx};
 
 use super::*;
 
-impl<'a> Parser<'a> {
+impl<I: Iterator<Item = Token> + Clone> Parser<I> {
     pub(crate) fn expr(&mut self) -> ExprIdx {
         self.primary_expr()
         // self.binop_rhs(0, lhs);

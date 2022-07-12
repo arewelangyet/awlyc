@@ -6,6 +6,7 @@ pub fn lex<'src>(src: &'src str) -> Lexer<'src> {
     Lexer::new(src)
 }
 
+#[derive(Debug, Clone)]
 pub struct Lexer<'src> {
     inner: logos::Lexer<'src, TokenKind>,
 }

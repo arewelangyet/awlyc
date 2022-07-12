@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'a> Parser<'a> {
+impl<I: Iterator<Item = Token> + Clone> Parser<I> {
     pub(super) fn top_level_decl(&mut self) -> Option<FnDecl> {
         if self.at(TokenKind::Fn) {
             Some(self.fn_decl())
