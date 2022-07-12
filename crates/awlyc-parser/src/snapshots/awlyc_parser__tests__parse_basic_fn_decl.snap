@@ -1,0 +1,29 @@
+---
+source: crates/awlyc-parser/src/lib.rs
+expression: s
+---
+Arena {
+    len: 1,
+    data: [
+        String(
+            "https://arewelangyet.com",
+        ),
+    ],
+}
+[
+    FnDecl {
+        name: "host",
+        params: FnParams(
+            [
+                FnParam(
+                    "foo",
+                ),
+                FnParam(
+                    "bar",
+                ),
+            ],
+        ),
+        body: Idx::<Expr>(0),
+    },
+]
+[]

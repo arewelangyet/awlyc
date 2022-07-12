@@ -1,0 +1,41 @@
+---
+source: crates/awlyc-lexer/src/lib.rs
+expression: s
+---
+[
+    Token {
+        kind: LParen,
+        text: "(",
+        range: 0..1,
+    },
+    Token {
+        kind: RParen,
+        text: ")",
+        range: 1..2,
+    },
+    Token {
+        kind: LCurly,
+        text: "{",
+        range: 2..3,
+    },
+    Token {
+        kind: RCurly,
+        text: "}",
+        range: 3..4,
+    },
+    Token {
+        kind: LSquare,
+        text: "[",
+        range: 4..5,
+    },
+    Token {
+        kind: RSquare,
+        text: "]",
+        range: 5..6,
+    },
+    Token {
+        kind: Comma,
+        text: ",",
+        range: 6..7,
+    },
+]

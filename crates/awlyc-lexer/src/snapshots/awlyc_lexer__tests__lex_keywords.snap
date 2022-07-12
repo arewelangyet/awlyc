@@ -1,0 +1,11 @@
+---
+source: crates/awlyc-lexer/src/lib.rs
+expression: s
+---
+[
+    Token {
+        kind: Fn,
+        text: "fn",
+        range: 0..2,
+    },
+]

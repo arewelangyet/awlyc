@@ -1,0 +1,26 @@
+---
+source: crates/awlyc-lexer/src/lib.rs
+expression: s
+---
+[
+    Token {
+        kind: Ident,
+        text: "testing",
+        range: 0..7,
+    },
+    Token {
+        kind: FloatLit,
+        text: "1.30",
+        range: 8..12,
+    },
+    Token {
+        kind: IntLit,
+        text: "249",
+        range: 13..16,
+    },
+    Token {
+        kind: Ident,
+        text: "_hi02",
+        range: 17..22,
+    },
+]

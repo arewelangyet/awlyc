@@ -1,0 +1,17 @@
+[package]
+name = "awlyc-parser"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+la-arena = "0.2.1"
+smol_str = "0.1.23"
+smallvec = "1.9.0"
+awlyc-lexer = { path = "../awlyc-lexer" }
+awlyc-error = { path = "../awlyc-error" }
+
+[dev-dependencies]
+insta = "1.15.0"
+paste = "1.0.7"
