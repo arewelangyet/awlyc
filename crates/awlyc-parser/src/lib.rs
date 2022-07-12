@@ -9,6 +9,8 @@ mod ast;
 mod decl;
 mod expr;
 
+const GLOBAL_RECOVERY_SET: &[TokenKind] = &[TokenKind::Fn];
+
 struct Parser<I: Iterator<Item = Token> + Clone> {
     tokens: Peekable<I>,
     errors: Vec<Diagnostic>,
@@ -32,10 +34,9 @@ impl<I: Iterator<Item = Token> + Clone> Parser<I> {
     fn next(&mut self) -> Option<Token> {
         self.expected_tokens.clear();
         self.tokens.next()
-        // self.tokens.get(self.idx)
     }
 
-    fn expect(&mut self, kind: TokenKind) -> Option<Token> {
+    fn expect(&mut self, kind: TokenKind, recovery_set: &[TokenKind]) -> Option<Token> {
         let tok = self.peek().cloned();
         if self.at(kind) {
             self.next();
@@ -48,6 +49,10 @@ impl<I: Iterator<Item = Token> + Clone> Parser<I> {
                     .reduce(|s, kind| format!("{}, {}", s, kind))
                     .unwrap()
             ));
+
+            while !self.at_set(recovery_set) && !self.at_end() {
+                self.next();
+            }
         }
         tok
     }
@@ -91,6 +96,11 @@ impl<I: Iterator<Item = Token> + Clone> Parser<I> {
     fn at(&mut self, kind: TokenKind) -> bool {
         self.expected_tokens.push(kind);
         self.peek_kind() == Some(kind)
+    }
+
+    #[inline]
+    fn at_set(&mut self, set: &[TokenKind]) -> bool {
+        self.peek().map_or(false, |k| set.contains(&k.kind))
     }
 
     pub(crate) fn parse(&mut self) -> Vec<FnDecl> {

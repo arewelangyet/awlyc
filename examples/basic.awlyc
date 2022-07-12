@@ -1,2 +1,2 @@
-fn host(foo, bar):
+fn host(bar:
   "https://arewelangyet.com/"

@@ -20,7 +20,7 @@ impl<I: Iterator<Item = Token> + Clone> Parser<I> {
     }
 
     fn string_expr(&mut self) -> Expr {
-        let content = self.expect(TokenKind::String).unwrap().text;
+        let content = self.expect(TokenKind::String, &[]).unwrap().text;
         let content = &content[1..content.len() - 1];
         Expr::String(SmolStr::from(content))
     }
