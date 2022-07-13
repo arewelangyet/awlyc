@@ -1,0 +1,5 @@
+fn project(title, author):
+    {
+        title,
+        author,
+    }

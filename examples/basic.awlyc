@@ -1,4 +1,10 @@
 import parsing "parsing.awlyc"
+import interning "interning.awlyc"
+
+fn linkTo(title):
+  {
+    url: title,
+  }
 
 [
   {
@@ -8,6 +14,13 @@ import parsing "parsing.awlyc"
       parsing.logos(),
       parsing.lalrpop(),
       parsing.chumsky()
+    ]
+  },
+   {
+    category: "String Interning",
+    link: linkTo("interning"),
+    pages: [
+      interning.lasso()
     ]
   },
 ]

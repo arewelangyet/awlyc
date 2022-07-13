@@ -3,27 +3,43 @@ source: crates/awlyc-parser/src/lib.rs
 expression: s
 ---
 Arena {
-    len: 1,
+    len: 2,
     data: [
         String(
             "https://arewelangyet.com",
         ),
+        Error,
     ],
 }
+Module {
+    imports: [],
+    functions: [
+        FnDecl {
+            name: "host",
+            params: FnParams(
+                [
+                    FnParam(
+                        "foo",
+                    ),
+                    FnParam(
+                        "bar",
+                    ),
+                ],
+            ),
+            body: Idx::<Expr>(0),
+        },
+    ],
+    expr: Idx::<Expr>(1),
+}
 [
-    FnDecl {
-        name: "host",
-        params: FnParams(
-            [
-                FnParam(
-                    "foo",
-                ),
-                FnParam(
-                    "bar",
-                ),
-            ],
-        ),
-        body: Idx::<Expr>(0),
+    Diagnostic {
+        kind: Error,
+        msg: "missing expression (nothing to evaluate)",
+        span: Span {
+            range: 44..45,
+            file_id: FileId(
+                "main",
+            ),
+        },
     },
 ]
-[]

@@ -1,0 +1,4 @@
+import utils "utils.awlyc"
+
+fn lasso():
+    utils.project("lasso", "kix")

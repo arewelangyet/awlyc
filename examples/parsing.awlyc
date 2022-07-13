@@ -1,4 +1,10 @@
-import main "basic.awlyc"
-import some_nested_stuff "nested/foo.awlyc"
+import utils "utils.awlyc"
 
-0
+fn logos():
+    utils.project("Logos", "X")
+
+fn lalrpop():
+    utils.project("Lalrpop", "X")
+
+fn chumsky():
+    utils.project("Chumsky", "Zesterer")

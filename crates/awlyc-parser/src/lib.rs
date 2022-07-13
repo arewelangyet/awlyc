@@ -6,7 +6,7 @@ use awlyc_lexer::{lex, Token, TokenKind};
 use la_arena::Arena;
 use text_size::TextRange;
 
-mod ast;
+pub mod ast;
 mod decl;
 mod expr;
 
@@ -14,7 +14,7 @@ mod expr;
 pub struct Module {
     pub imports: Vec<ImportDecl>,
     pub functions: Vec<FnDecl>,
-    pub expr: ExprIdx,
+    pub expr: Option<ExprIdx>,
 }
 
 const GLOBAL_RECOVERY_SET: &[TokenKind] = &[TokenKind::Fn];
@@ -24,18 +24,23 @@ struct Parser<'src, I: Iterator<Item = Token> + Clone> {
     errors: Vec<Diagnostic>,
     /// Token kinds we expect to find are stored here to be displayed in error diagnostics
     expected_tokens: Vec<TokenKind>,
-    expr_arena: Arena<Expr>,
+    expr_arena: &'src mut Arena<Expr>,
     file_id: FileId,
     src: &'src str,
 }
 
 impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
-    pub(crate) fn new(tokens: Peekable<I>, src: &'src str, file_id: FileId) -> Self {
+    pub(crate) fn new(
+        tokens: Peekable<I>,
+        src: &'src str,
+        expr_arena: &'src mut Arena<Expr>,
+        file_id: FileId,
+    ) -> Self {
         Self {
             tokens,
             errors: vec![],
             expected_tokens: vec![],
-            expr_arena: Arena::default(),
+            expr_arena,
             src,
             file_id,
         }
@@ -135,11 +140,15 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
     }
 }
 
-pub fn parse(src: &str, file_id: FileId) -> (Module, Arena<Expr>, Vec<Diagnostic>) {
+pub fn parse(
+    src: &str,
+    expr_arena: &mut Arena<Expr>,
+    file_id: FileId,
+) -> (Module, Vec<Diagnostic>) {
     let tokens = lex(src).peekable();
-    let mut parser = Parser::new(tokens, src, file_id);
+    let mut parser = Parser::new(tokens, src, expr_arena, file_id);
     let module = parser.parse();
-    (module, parser.expr_arena, parser.errors)
+    (module, parser.errors)
 }
 
 #[cfg(test)]
@@ -151,7 +160,8 @@ mod tests {
             paste::paste! {
                     #[test]
                     fn [<test_parse_ $name>]() {
-                        let (decls, expr_arena, errors) = crate::parse($src, awlyc_error::FileId(smol_str::SmolStr::from("main")));
+                        let mut expr_arena = la_arena::Arena::default();
+                        let (decls, errors) = crate::parse($src, &mut expr_arena, awlyc_error::FileId(smol_str::SmolStr::from("main")));
                         let s = format!("{:#?}\n{:#?}\n{:#?}", expr_arena, decls, errors);
                         insta::assert_snapshot!(s);
                     }

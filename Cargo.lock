@@ -23,6 +23,8 @@ version = "0.1.0"
 dependencies = [
  "awlyc-error",
  "awlyc-parser",
+ "awlyc-values",
+ "la-arena",
  "smol_str",
  "text-size",
 ]
@@ -56,6 +58,18 @@ dependencies = [
  "insta",
  "la-arena",
  "paste",
+ "smallvec",
+ "smol_str",
+ "text-size",
+]
+
+[[package]]
+name = "awlyc-values"
+version = "0.1.0"
+dependencies = [
+ "awlyc-error",
+ "awlyc-parser",
+ "la-arena",
  "smallvec",
  "smol_str",
  "text-size",

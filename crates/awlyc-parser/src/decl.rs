@@ -31,12 +31,6 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
                 expr = Some(self.expr());
             }
         }
-        let expr = if expr.is_none() {
-            self.error(format!("missing expression (nothing to evaluate)"));
-            self.expr_arena.alloc(Expr::Error)
-        } else {
-            expr.unwrap()
-        };
         Module {
             imports,
             functions,
