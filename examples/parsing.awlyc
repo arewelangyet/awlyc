@@ -1,0 +1,4 @@
+import main "basic.awlyc"
+import some_nested_stuff "nested/foo.awlyc"
+
+0

@@ -87,12 +87,12 @@ impl Diagnostic {
     }
 }
 
-pub struct DiagnosticReporter<'src> {
-    pub files: Vec<(FileId, &'src str)>,
+pub struct DiagnosticReporter {
+    pub files: Vec<(FileId, String)>,
 }
 
-impl<'src> DiagnosticReporter<'src> {
-    pub fn add_file(&mut self, name: SmolStr, src: &'src str) -> FileId {
+impl DiagnosticReporter {
+    pub fn add_file(&mut self, name: SmolStr, src: String) -> FileId {
         self.files.push((FileId(name.clone()), src));
         FileId(name)
     }

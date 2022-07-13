@@ -4,13 +4,6 @@ use la_arena::Idx;
 use smallvec::SmallVec;
 use smol_str::SmolStr;
 
-#[derive(Debug)]
-pub struct Module {
-    pub imports: Vec<ImportDecl>,
-    pub functions: Vec<FnDecl>,
-    pub expr: ExprIdx,
-}
-
 pub type ExprIdx = Idx<Expr>;
 
 #[derive(Debug)]
@@ -44,7 +37,7 @@ pub struct Binop {
     pub rhs: ExprIdx,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ImportDecl {
     pub name: SmolStr,
     pub path: SmolStr,

@@ -1,4 +1,6 @@
-use crate::ast::{ImportDecl, Module};
+use smol_str::SmolStr;
+
+use crate::ast::ImportDecl;
 
 use super::*;
 
@@ -49,12 +51,16 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
             .unwrap()
             .text
             .into();
-        let path = self
+        let path: SmolStr = self
             .expect(TokenKind::StringLit, IMPORT_PATH_RECOVERY_SET)
             .unwrap()
             .text
             .into();
-        ImportDecl { name, path }
+        let path = &path[1..path.len() - 1]; // TODO: this should probably be handled during lexing
+        ImportDecl {
+            name,
+            path: SmolStr::from(path),
+        }
     }
 
     fn fn_decl(&mut self) -> FnDecl {

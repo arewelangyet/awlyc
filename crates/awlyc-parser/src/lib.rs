@@ -1,6 +1,6 @@
 use std::iter::Peekable;
 
-use ast::{Expr, FnDecl, FnParam, FnParams, ImportDecl, Module};
+use ast::{Expr, ExprIdx, FnDecl, FnParam, FnParams, ImportDecl};
 use awlyc_error::{Diagnostic, DiagnosticKind, FileId, Span};
 use awlyc_lexer::{lex, Token, TokenKind};
 use la_arena::Arena;
@@ -9,6 +9,13 @@ use text_size::TextRange;
 mod ast;
 mod decl;
 mod expr;
+
+#[derive(Debug)]
+pub struct Module {
+    pub imports: Vec<ImportDecl>,
+    pub functions: Vec<FnDecl>,
+    pub expr: ExprIdx,
+}
 
 const GLOBAL_RECOVERY_SET: &[TokenKind] = &[TokenKind::Fn];
 
@@ -68,7 +75,11 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
                 range
             } else {
                 let len = self.src.len();
-                TextRange::new(((len - 1) as u32).into(), (len as u32).into())
+                if len == 0 {
+                    TextRange::new(0.into(), 0.into())
+                } else {
+                    TextRange::new(((len - 1) as u32).into(), (len as u32).into())
+                }
             }
         };
 
