@@ -1,7 +1,10 @@
 use std::{collections::HashMap, env, fs, path::PathBuf, process::exit};
 
 use awlyc_error::{Diagnostic, DiagnosticKind, DiagnosticReporter, FileId, Span};
-use awlyc_parser::{ast::Expr, parse, Module};
+use awlyc_parser::{
+    ast::{Expr, Spanned},
+    parse, Module,
+};
 use la_arena::Arena;
 use smol_str::SmolStr;
 use text_size::TextRange;
@@ -28,7 +31,7 @@ fn canonicalize_path(path: &str, diagnostic_reporter: &mut DiagnosticReporter) -
 fn parse_file(
     path: &str,
     modules: &mut HashMap<FileId, Module>,
-    expr_arena: &mut Arena<Expr>,
+    expr_arena: &mut Arena<Spanned<Expr>>,
     diagnostic_reporter: &mut DiagnosticReporter,
 ) {
     let mut path = canonicalize_path(path, diagnostic_reporter);

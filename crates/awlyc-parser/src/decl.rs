@@ -1,6 +1,6 @@
 use smol_str::SmolStr;
 
-use crate::ast::ImportDecl;
+use crate::ast::{ImportDecl, Spanned};
 
 use super::*;
 
@@ -59,18 +59,23 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
 
     fn fn_decl(&mut self) -> FnDecl {
         self.expect(TokenKind::Fn, &[]);
-        let name = self
-            .expect(TokenKind::Ident, FN_NAME_RECOVERY_SET)
-            .unwrap()
-            .text;
+        let name = self.expect(TokenKind::Ident, FN_NAME_RECOVERY_SET).unwrap();
+        let name = Spanned {
+            inner: name.text,
+            span: Span {
+                range: name.range,
+                file_id: self.file_id.clone(),
+            },
+        };
         let params = self.fn_params();
         self.expect(TokenKind::Colon, FN_COLON_RECOVERY_SET);
         let body = self.expr();
         FnDecl { name, params, body }
     }
 
-    fn fn_params(&mut self) -> FnParams {
+    fn fn_params(&mut self) -> Spanned<FnParams> {
         let mut params = vec![];
+        let start = self.peek_range().start();
         self.expect(TokenKind::LParen, FN_PARAMS_BEGIN_RECOVERY_SET);
         while !self.at(TokenKind::RParen) && !self.at_end() {
             params.push(self.fn_param());
@@ -80,7 +85,14 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
             }
         }
         self.expect(TokenKind::RParen, FN_PARAMS_END_RECOVERY_SET);
-        FnParams(params)
+        let end = self.peek_range().end();
+        Spanned {
+            inner: FnParams(params),
+            span: Span {
+                range: TextRange::new(start, end),
+                file_id: self.file_id.clone(),
+            },
+        }
     }
 
     fn fn_param(&mut self) -> FnParam {

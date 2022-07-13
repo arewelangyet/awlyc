@@ -1,0 +1,50 @@
+---
+source: crates/awlyc-parser/src/lib.rs
+assertion_line: 175
+expression: s
+---
+Arena {
+    len: 1,
+    data: [
+        String(
+            "https://arewelangyet.com",
+        ),
+    ],
+}
+Module {
+    imports: [],
+    functions: [
+        FnDecl {
+            name: Spanned {
+                inner: "host",
+                span: Span {
+                    range: 3..7,
+                    file_id: FileId(
+                        "main",
+                    ),
+                },
+            },
+            params: Spanned {
+                inner: FnParams(
+                    [
+                        FnParam(
+                            "foo",
+                        ),
+                        FnParam(
+                            "bar",
+                        ),
+                    ],
+                ),
+                span: Span {
+                    range: 7..18,
+                    file_id: FileId(
+                        "main",
+                    ),
+                },
+            },
+            body: Idx::<Expr>(0),
+        },
+    ],
+    expr: None,
+}
+[]

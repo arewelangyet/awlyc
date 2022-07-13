@@ -1,6 +1,6 @@
 use std::iter::Peekable;
 
-use ast::{Expr, ExprIdx, FnDecl, FnParam, FnParams, ImportDecl};
+use ast::{Expr, ExprIdx, FnDecl, FnParam, FnParams, ImportDecl, Spanned};
 use awlyc_error::{Diagnostic, DiagnosticKind, FileId, Span};
 use awlyc_lexer::{lex, Token, TokenKind};
 use la_arena::Arena;
@@ -24,7 +24,7 @@ struct Parser<'src, I: Iterator<Item = Token> + Clone> {
     errors: Vec<Diagnostic>,
     /// Token kinds we expect to find are stored here to be displayed in error diagnostics
     expected_tokens: Vec<TokenKind>,
-    expr_arena: &'src mut Arena<Expr>,
+    expr_arena: &'src mut Arena<Spanned<Expr>>,
     file_id: FileId,
     src: &'src str,
 }
@@ -33,7 +33,7 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
     pub(crate) fn new(
         tokens: Peekable<I>,
         src: &'src str,
-        expr_arena: &'src mut Arena<Expr>,
+        expr_arena: &'src mut Arena<Spanned<Expr>>,
         file_id: FileId,
     ) -> Self {
         Self {
@@ -73,7 +73,21 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
     }
 
     fn error(&mut self, msg: String) {
-        let range = if let Some(Token { range, .. }) = self.peek() {
+        let range = self.peek_range();
+        self.errors.push(Diagnostic {
+            kind: DiagnosticKind::Error,
+            msg,
+            span: Span {
+                range,
+                file_id: self.file_id.clone(),
+            },
+        });
+
+        self.next();
+    }
+
+    fn peek_range(&mut self) -> TextRange {
+        if let Some(Token { range, .. }) = self.peek() {
             *range
         } else {
             if let Some(range) = self.tokens.clone().last().map(|Token { range, .. }| range) {
@@ -86,18 +100,7 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
                     TextRange::new(((len - 1) as u32).into(), (len as u32).into())
                 }
             }
-        };
-
-        self.errors.push(Diagnostic {
-            kind: DiagnosticKind::Error,
-            msg,
-            span: Span {
-                range,
-                file_id: self.file_id.clone(),
-            },
-        });
-
-        self.next();
+        }
     }
 
     #[inline]
@@ -142,7 +145,7 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
 
 pub fn parse(
     src: &str,
-    expr_arena: &mut Arena<Expr>,
+    expr_arena: &mut Arena<Spanned<Expr>>,
     file_id: FileId,
 ) -> (Module, Vec<Diagnostic>) {
     let tokens = lex(src).peekable();

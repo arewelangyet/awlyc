@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 use awlyc_error::{Diagnostic, DiagnosticKind, FileId, Span};
 use awlyc_parser::{
-    ast::{Expr, ExprIdx, FnDecl},
+    ast::{Expr, ExprIdx, FnDecl, Spanned},
     Module,
 };
 use la_arena::Arena;
@@ -23,14 +23,14 @@ pub enum AwlycValue {
 struct LoweringCtx<'a> {
     entry: &'a PathBuf,
     modules: &'a HashMap<FileId, Module>,
-    expr_arena: &'a Arena<Expr>,
+    expr_arena: &'a Arena<Spanned<Expr>>,
 }
 
 impl<'a> LoweringCtx<'a> {
     pub fn new(
         entry: &'a PathBuf,
         modules: &'a HashMap<FileId, Module>,
-        expr_arena: &'a Arena<Expr>,
+        expr_arena: &'a Arena<Spanned<Expr>>,
     ) -> Self {
         Self {
             entry,
@@ -68,33 +68,27 @@ impl<'a> LoweringCtx<'a> {
         module: &Module,
         substitutions: Option<&[(SmolStr, ExprIdx)]>,
     ) -> ValueResult {
-        let val = match &self.expr_arena[idx] {
+        let val = match &self.expr_arena[idx].inner {
             // This is gonna be a substitution
             Expr::Path(path) => {
                 assert_eq!(path.len(), 1);
                 let path = path.first().unwrap();
                 if let Some(substitutions) = substitutions {
                     for (name, expr) in substitutions {
-                        if name == path {
+                        if *name == path.inner {
                             return self.lower_expr(*expr, module, Some(substitutions));
                         }
                     }
                     return Err(Diagnostic {
                         kind: DiagnosticKind::Error,
-                        msg: format!("unknown identifier referenced `{}`", path),
-                        span: Span {
-                            range: TextRange::new(0.into(), 0.into()),
-                            file_id: self.file_id(self.entry),
-                        },
+                        msg: format!("unknown identifier referenced `{}`", path.inner),
+                        span: path.span.clone(),
                     });
                 } else {
                     return Err(Diagnostic {
                         kind: DiagnosticKind::Error,
-                        msg: format!("unknown identifier referenced `{}`", path),
-                        span: Span {
-                            range: TextRange::new(0.into(), 0.into()),
-                            file_id: self.file_id(self.entry),
-                        },
+                        msg: format!("unknown identifier referenced `{}`", path.inner),
+                        span: path.span.clone(),
                     });
                 }
             }
@@ -116,7 +110,7 @@ impl<'a> LoweringCtx<'a> {
                 AwlycValue::Record(record)
             }
             Expr::Call(call) => {
-                let callee = match &self.expr_arena[call.callee] {
+                let callee = match &self.expr_arena[call.callee].inner {
                     Expr::Path(path) => path,
                     _ => unreachable!(),
                 };
@@ -125,11 +119,8 @@ impl<'a> LoweringCtx<'a> {
                 if callee.len() > 2 {
                     return Err(Diagnostic {
                         kind: DiagnosticKind::Error,
-                        msg: format!("unknown function referenced `{}`", callee.join(".")),
-                        span: Span {
-                            range: TextRange::new(0.into(), 0.into()),
-                            file_id: self.file_id(self.entry),
-                        },
+                        msg: format!("unknown function referenced `{}`", path_to_string(callee)),
+                        span: self.expr_arena[call.callee].span.clone(),
                     });
                 }
 
@@ -141,14 +132,14 @@ impl<'a> LoweringCtx<'a> {
                 }
 
                 let import_alias = callee.first().unwrap(); // import foo "path.awlyc" -- foo is the import_alias
-                let import_idx = module
+                if let Some(import) = module
                     .imports
                     .iter()
-                    .position(|import| import.name == *import_alias);
-                if let Some(idx) = import_idx {
+                    .find(|import| import.name == *import_alias.inner)
+                {
                     let mut path = self.entry.clone();
                     path.pop();
-                    path.push(module.imports[idx].path.as_str());
+                    path.push(import.path.as_str());
                     let module_id = self.file_id(&path);
                     let module = &self.modules[&module_id];
                     let f = self.find_function_in_module(callee.last().unwrap(), module)?;
@@ -156,11 +147,8 @@ impl<'a> LoweringCtx<'a> {
                 } else {
                     return Err(Diagnostic {
                         kind: DiagnosticKind::Error,
-                        msg: format!("unknown module referenced `{}`", callee.first().unwrap()),
-                        span: Span {
-                            range: TextRange::new(0.into(), 0.into()),
-                            file_id: self.file_id(self.entry),
-                        },
+                        msg: format!("unknown module referenced `{}`", import_alias.inner),
+                        span: import_alias.span.clone(),
                     });
                 }
             }
@@ -171,52 +159,60 @@ impl<'a> LoweringCtx<'a> {
 
     fn find_function_in_module(
         &self,
-        name: &SmolStr,
+        name: &Spanned<SmolStr>,
         module: &'a Module,
     ) -> Result<&'a FnDecl, Diagnostic> {
-        let f_idx = module.functions.iter().position(|f| f.name == *name);
-        if let Some(idx) = f_idx {
-            return Ok(&module.functions[idx]);
+        if let Some(function) = module.functions.iter().find(|f| f.name.inner == name.inner) {
+            return Ok(&function);
         } else {
             return Err(Diagnostic {
                 kind: DiagnosticKind::Error,
-                msg: format!("unknown function referenced `{}`", name),
-                span: Span {
-                    range: TextRange::new(0.into(), 0.into()),
-                    file_id: self.file_id(self.entry),
-                },
+                msg: format!("unknown function referenced `{}`", name.inner),
+                span: name.span.clone(),
             });
         }
     }
 
-    fn expand_function(&self, f: &FnDecl, args: &[ExprIdx], module: &Module) -> ValueResult {
+    fn expand_function(
+        &self,
+        f: &FnDecl,
+        args: &Spanned<Vec<ExprIdx>>,
+        module: &Module,
+    ) -> ValueResult {
         let params_len = f.params.0.len();
         let args_len = args.len();
         if params_len != args_len {
             return Err(Diagnostic {
                 kind: DiagnosticKind::Error,
-                msg: format!("incorrect number of arguments supplied to `{}`", f.name),
-                span: Span {
-                    range: TextRange::new(0.into(), 0.into()),
-                    file_id: self.file_id(self.entry),
-                },
+                msg: format!(
+                    "incorrect number of arguments supplied to `{}`",
+                    f.name.inner
+                ),
+                span: args.span.clone(),
             });
         }
         let substitutions: &[(SmolStr, ExprIdx)] = &f
             .params
             .0
             .iter()
-            .zip(args)
+            .zip(&args.inner)
             .map(|(param, arg)| (param.0.clone(), *arg))
             .collect::<Vec<_>>();
         self.lower_expr(f.body, module, Some(substitutions))
     }
 }
 
+fn path_to_string(path: &[Spanned<SmolStr>]) -> String {
+    path.iter()
+        .map(|s| s.to_string())
+        .reduce(|acc, s| format!("{}.{}", acc, s))
+        .unwrap()
+}
+
 pub fn lower(
     entry: &str,
     modules: &HashMap<FileId, Module>,
-    expr_arena: &Arena<Expr>,
+    expr_arena: &Arena<Spanned<Expr>>,
 ) -> ValueResult {
     // let entry_file_id = FileId(SmolStr::from(
     // std::fs::canonicalize(entry).unwrap().to_str().unwrap(),

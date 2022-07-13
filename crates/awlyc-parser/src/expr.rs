@@ -5,7 +5,7 @@ use super::*;
 use smallvec::SmallVec;
 use smol_str::SmolStr;
 
-use crate::ast::{Binop, BinopKind, Call, Expr, ExprIdx};
+use crate::ast::{Binop, BinopKind, Call, Expr, ExprIdx, Spanned};
 
 // Catch expression, or the end of array
 const ARRAY_COMMA_RECOVERY_SET: &[TokenKind] = &[
@@ -77,7 +77,13 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
             self.record_expr()
         } else {
             self.error(format!("expected expression"));
-            Expr::Error
+            Spanned {
+                inner: Expr::Error,
+                span: Span {
+                    range: self.peek_range(),
+                    file_id: self.file_id.clone(),
+                },
+            }
         };
         self.expr_arena.alloc(expr)
     }
@@ -99,14 +105,22 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
             if tok_prec < next_prec {
                 rhs = self.binop_rhs(tok_prec + 1, rhs.clone());
             }
-            lhs = self.expr_arena.alloc(Expr::Binop(Binop {
-                lhs,
-                op: match binop {
-                    TokenKind::Plus => BinopKind::Add,
-                    _ => unreachable!(),
+            let end = self.peek_range().end();
+
+            lhs = self.expr_arena.alloc(Spanned {
+                inner: Expr::Binop(Binop {
+                    lhs,
+                    op: match binop {
+                        TokenKind::Plus => BinopKind::Add,
+                        _ => unreachable!(),
+                    },
+                    rhs,
+                }),
+                span: Span {
+                    range: TextRange::new(self.expr_arena[lhs].span.range.end(), end),
+                    file_id: self.file_id.clone(),
                 },
-                rhs,
-            }));
+            });
         }
     }
 
@@ -119,21 +133,41 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
         }
     }
 
-    fn path_expr(&mut self) -> Expr {
+    fn path_expr(&mut self) -> Spanned<Expr> {
+        let start = self.peek_range().start();
         let mut parts = vec![];
-        parts.push(self.expect(TokenKind::Ident, &[]).unwrap().text);
+        let part = self.expect(TokenKind::Ident, &[]).unwrap();
+        parts.push(Spanned {
+            inner: part.text,
+            span: Span {
+                range: part.range,
+                file_id: self.file_id.clone(),
+            },
+        });
+
         while self.at(TokenKind::Period) {
             self.next();
-            parts.push(
-                self.expect(TokenKind::Ident, PATH_RECOVERY_SET)
-                    .unwrap()
-                    .text,
-            );
+            let part = self.expect(TokenKind::Ident, PATH_RECOVERY_SET).unwrap();
+            parts.push(Spanned {
+                inner: part.text,
+                span: Span {
+                    range: part.range,
+                    file_id: self.file_id.clone(),
+                },
+            });
         }
-        Expr::Path(parts)
+        let end = self.peek_range().end();
+        Spanned {
+            inner: Expr::Path(parts),
+            span: Span {
+                range: TextRange::new(start, end),
+                file_id: self.file_id.clone(),
+            },
+        }
     }
 
-    fn int_expr(&mut self) -> Expr {
+    fn int_expr(&mut self) -> Spanned<Expr> {
+        let start = self.peek_range().start();
         // remove '_' chars (they are used as separators for improving readability of large numbers)
         let text = self.peek().unwrap().text.replace("_", "");
         let prefix: String = text.chars().take(2).collect();
@@ -145,31 +179,69 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
         let n = u64::from_str_radix(&text, radix);
         if let Some(err) = n.as_ref().err() {
             self.error(format!("could not parse integer: {}", err));
-            Expr::Error
+            let end = self.peek_range().end();
+            Spanned {
+                inner: Expr::Error,
+                span: Span {
+                    range: TextRange::new(start, end),
+                    file_id: self.file_id.clone(),
+                },
+            }
         } else {
             self.next();
-            Expr::Int(n.unwrap())
+            let end = self.peek_range().end();
+            Spanned {
+                inner: Expr::Int(n.unwrap()),
+                span: Span {
+                    range: TextRange::new(start, end),
+                    file_id: self.file_id.clone(),
+                },
+            }
         }
     }
 
-    fn float_lit(&mut self) -> Expr {
+    fn float_lit(&mut self) -> Spanned<Expr> {
+        let start = self.peek_range().start();
         let n: Result<f64, _> = self.peek().unwrap().text.parse();
         if let Some(err) = n.as_ref().err() {
             self.error(format!("could not parse float: {}", err));
-            Expr::Error
+            let end = self.peek_range().end();
+            Spanned {
+                inner: Expr::Error,
+                span: Span {
+                    range: TextRange::new(start, end),
+                    file_id: self.file_id.clone(),
+                },
+            }
         } else {
             self.next();
-            Expr::Float(n.unwrap())
+            let end = self.peek_range().end();
+            Spanned {
+                inner: Expr::Float(n.unwrap()),
+                span: Span {
+                    range: TextRange::new(start, end),
+                    file_id: self.file_id.clone(),
+                },
+            }
         }
     }
 
-    fn string_expr(&mut self) -> Expr {
+    fn string_expr(&mut self) -> Spanned<Expr> {
+        let start = self.peek_range().start();
         let content = self.expect(TokenKind::StringLit, &[]).unwrap().text;
         let content = &content[1..content.len() - 1];
-        Expr::String(SmolStr::from(content))
+        let end = self.peek_range().end();
+        Spanned {
+            inner: Expr::String(SmolStr::from(content)),
+            span: Span {
+                range: TextRange::new(start, end),
+                file_id: self.file_id.clone(),
+            },
+        }
     }
 
-    fn array_expr(&mut self) -> Expr {
+    fn array_expr(&mut self) -> Spanned<Expr> {
+        let start = self.peek_range().start();
         let mut exprs = SmallVec::new();
         self.expect(TokenKind::LSquare, &[]); // we checked that this was an LSquare before entering this function, so no recover set needed
         while !self.at(TokenKind::RSquare) && !self.at_end() {
@@ -180,20 +252,43 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
             exprs.push(expr);
         }
         self.expect(TokenKind::RSquare, ARRAY_CLOSE_BRACKET_RECOVERY_SET);
-        Expr::Array(exprs)
+        let end = self.peek_range().end();
+        Spanned {
+            inner: Expr::Array(exprs),
+            span: Span {
+                range: TextRange::new(start, end),
+                file_id: self.file_id.clone(),
+            },
+        }
     }
 
-    fn record_expr(&mut self) -> Expr {
-        let mut fields = HashMap::new();
+    fn record_expr(&mut self) -> Spanned<Expr> {
+        let start = self.peek_range().start();
+        let mut fields: HashMap<SmolStr, ExprIdx> = HashMap::new();
         self.expect(TokenKind::LCurly, &[]); // see comment in array_expr
         while !self.at(TokenKind::RCurly) && !self.at_end() {
             let key = self
                 .expect(TokenKind::Ident, RECORD_KEY_RECOVERY_SET)
-                .unwrap()
-                .text;
+                .unwrap();
+            let key = Spanned {
+                inner: key.text,
+                span: Span {
+                    range: key.range,
+                    file_id: self.file_id.clone(),
+                },
+            };
             if self.at(TokenKind::Comma) {
                 self.next();
-                fields.insert(key.clone(), self.expr_arena.alloc(Expr::Path(vec![key])));
+                fields.insert(
+                    key.inner.clone(),
+                    self.expr_arena.alloc(Spanned {
+                        inner: Expr::Path(vec![Spanned {
+                            inner: key.inner.clone(),
+                            span: key.span.clone(), // this literally makes no sense but for some reason i cant just do key.clone()...
+                        }]),
+                        span: key.span.clone(),
+                    }),
+                );
                 continue;
             }
             self.expect(TokenKind::Colon, RECORD_COLON_RECOVERY_SET);
@@ -202,13 +297,22 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
             if !self.at(TokenKind::RCurly) {
                 self.expect(TokenKind::Comma, RECORD_COMMA_RECOVERY_SET);
             }
-            fields.insert(key, value);
+            fields.insert(key.inner, value);
         }
         self.expect(TokenKind::RCurly, RECORD_CLOSE_BRACKET_RECOVERY_SET);
-        Expr::Record(fields)
+        let end = self.peek_range().end();
+        Spanned {
+            inner: Expr::Record(fields),
+            span: Span {
+                range: TextRange::new(start, end),
+                file_id: self.file_id.clone(),
+            },
+        }
     }
 
-    fn call_expr(&mut self, callee: ExprIdx) -> Expr {
+    fn call_expr(&mut self, callee: ExprIdx) -> Spanned<Expr> {
+        let start = self.expr_arena[callee].span.range.start();
+        let args_start = self.peek_range().start();
         let mut args = vec![];
         self.expect(TokenKind::LParen, CALL_OPEN_PAREN_RECOVERY_SET);
         while !self.at(TokenKind::RParen) && !self.at_end() {
@@ -218,6 +322,22 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
             }
         }
         self.expect(TokenKind::RParen, CALL_CLOSE_PAREN_RECOVERY_SET);
-        Expr::Call(Call { callee, args })
+        let end = self.peek_range().end();
+        Spanned {
+            inner: Expr::Call(Call {
+                callee,
+                args: Spanned {
+                    inner: args,
+                    span: Span {
+                        range: TextRange::new(args_start, end),
+                        file_id: self.file_id.clone(),
+                    },
+                },
+            }),
+            span: Span {
+                range: TextRange::new(start, end),
+                file_id: self.file_id.clone(),
+            },
+        }
     }
 }
