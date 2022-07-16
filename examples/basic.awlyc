@@ -1,26 +1,26 @@
-import parsing "parsing.awlyc"
-import interning "interning.awlyc"
+# import parsing "parsing.awlyc"
+# import interning "interning.awlyc"
 
-fn linkTo(title):
+fn topic(id, name, description) {
   {
-    url: title,
+    id,
+    name,
+    description,
   }
+}
 
-[
+fn project(name, repo, crates_io, description, docs, topics) {
   {
-    category: "Parsing & Lexing",
-    link: linkTo("parsing"),
-    pages: [
-      parsing.logos(),
-      parsing.lalrpop(),
-      parsing.chumsky()
-    ]
-  },
-   {
-    category: "String Interning",
-    link: linkTo("interning"),
-    pages: [
-      interning.lasso()
-    ]
-  },
-]
+    name,
+    repo,
+    crates_io,
+    description,
+    docs,
+    topics,
+  }
+}
+
+{
+  title: "Hi",
+  author: "Test"
+}

@@ -1,11 +1,13 @@
-use std::{collections::HashMap, env, fs, path::PathBuf, process::exit};
+use std::{collections::HashMap, fs, path::PathBuf};
 
 use awlyc_error::{Diagnostic, DiagnosticKind, DiagnosticReporter, FileId, Span};
 use awlyc_parser::{
     ast::{Expr, Spanned},
     parse, Module,
 };
+use awlyc_values::{deserialize::from_awlyc_val, lower};
 use la_arena::Arena;
+use serde::de::DeserializeOwned;
 use smol_str::SmolStr;
 use text_size::TextRange;
 
@@ -21,7 +23,7 @@ fn canonicalize_path(path: &str, diagnostic_reporter: &mut DiagnosticReporter) -
                     file_id: FileId(SmolStr::from("")),
                 },
             });
-            exit(1);
+            panic!("could not open file");
         }
         Ok(absolute_path) => absolute_path,
     }
@@ -64,34 +66,54 @@ fn parse_file(
     }
 }
 
+pub fn from_file<T>(path: &str) -> T
+where
+    T: DeserializeOwned,
+{
+    let mut modules = HashMap::new();
+    let mut expr_arena = Arena::default();
+    let mut diagnostic_reporter = DiagnosticReporter { files: vec![] };
+    parse_file(
+        path,
+        &mut modules,
+        &mut expr_arena,
+        &mut diagnostic_reporter,
+    );
+
+    let res = lower(path, &modules, &expr_arena);
+    let value = match res {
+        Err(err) => {
+            diagnostic_reporter.report(&err);
+            panic!("")
+        }
+        Ok(value) => value,
+    };
+
+    match from_awlyc_val(&value) {
+        Err(err) => {
+            diagnostic_reporter.report(&err);
+            panic!("")
+        }
+        Ok(value) => value,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::parse_file;
-    use awlyc_error::DiagnosticReporter;
-    use awlyc_values::lower;
-    use la_arena::Arena;
-    use std::collections::HashMap;
+    use serde::Deserialize;
+
+    use crate::from_file;
 
     #[test]
     fn basic() {
-        struct Page {
+        #[derive(Debug, Deserialize)]
+        struct Project {
             title: String,
-            link: String,
-            version: f32,
+            author: String,
         }
-        let mut modules = HashMap::new();
-        let mut expr_arena = Arena::default();
-        let mut diagnostic_reporter = DiagnosticReporter { files: vec![] };
-        parse_file(
-            "../../examples/basic.awlyc",
-            &mut modules,
-            &mut expr_arena,
-            &mut diagnostic_reporter,
-        );
 
-        let res = lower("../../examples/basic.awlyc", &modules, &expr_arena);
-        if let Some(err) = res.err() {
-            diagnostic_reporter.report(&err);
-        }
+        let result: Project = from_file("../../examples/basic.awlyc");
+
+        println!("{:#?}", result);
     }
 }

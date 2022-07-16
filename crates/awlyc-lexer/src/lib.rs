@@ -50,6 +50,8 @@ pub enum TokenKind {
     Fn,
     #[token("import")]
     Import,
+    #[token("null")]
+    Null,
     #[token("(")]
     LParen,
     #[token(")")]
@@ -70,6 +72,12 @@ pub enum TokenKind {
     DoubleQuote,
     #[token("+")]
     Plus,
+    #[token("-")]
+    Minus,
+    #[token("*")]
+    Star,
+    #[token("/")]
+    FSlah,
     #[token(".")]
     Period,
 

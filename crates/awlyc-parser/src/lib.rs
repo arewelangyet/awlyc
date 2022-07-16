@@ -17,7 +17,7 @@ pub struct Module {
     pub expr: Option<ExprIdx>,
 }
 
-const GLOBAL_RECOVERY_SET: &[TokenKind] = &[TokenKind::Fn];
+const GLOBAL_RECOVERY_SET: &[TokenKind] = &[TokenKind::Fn, TokenKind::Import];
 
 struct Parser<'src, I: Iterator<Item = Token> + Clone> {
     tokens: Peekable<I>,
@@ -131,6 +131,10 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
     fn tok_prec(&mut self) -> i32 {
         if let Some(tok) = self.peek() {
             match tok.kind {
+                TokenKind::Plus => 10,
+                TokenKind::Minus => 10,
+                TokenKind::Star => 20,
+                TokenKind::FSlah => 20,
                 _ => -1,
             }
         } else {

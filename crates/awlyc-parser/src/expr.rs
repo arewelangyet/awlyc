@@ -5,18 +5,18 @@ use super::*;
 use smallvec::SmallVec;
 use smol_str::SmolStr;
 
-use crate::ast::{Binop, BinopKind, Call, Expr, ExprIdx, Spanned};
+use crate::ast::{Binop, BinopKind, Call, Expr, ExprIdx, Negate, Record, Spanned};
 
 // Catch expression, or the end of array
-const ARRAY_COMMA_RECOVERY_SET: &[TokenKind] = &[
-    TokenKind::Ident,
-    TokenKind::IntLit,
-    TokenKind::FloatLit,
-    TokenKind::StringLit,
-    TokenKind::LSquare,
-    TokenKind::LCurly,
-    TokenKind::RSquare,
-];
+// const ARRAY_COMMA_RECOVERY_SET: &[TokenKind] = &[
+//     TokenKind::Ident,
+//     TokenKind::IntLit,
+//     TokenKind::FloatLit,
+//     TokenKind::StringLit,
+//     TokenKind::LSquare,
+//     TokenKind::LCurly,
+//     TokenKind::RSquare,
+// ];
 const ARRAY_CLOSE_BRACKET_RECOVERY_SET: &[TokenKind] = GLOBAL_RECOVERY_SET;
 
 // Catch comma, expression, or end of record
@@ -67,6 +67,8 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
             self.path_expr()
         } else if self.at(TokenKind::IntLit) {
             self.int_expr()
+        } else if self.at(TokenKind::Minus) {
+            self.negate_expr()
         } else if self.at(TokenKind::FloatLit) {
             self.float_lit()
         } else if self.at(TokenKind::StringLit) {
@@ -75,6 +77,8 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
             self.array_expr()
         } else if self.at(TokenKind::LCurly) {
             self.record_expr()
+        } else if self.at(TokenKind::Null) {
+            self.null_expr()
         } else {
             self.error(format!("expected expression"));
             Spanned {
@@ -112,6 +116,9 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
                     lhs,
                     op: match binop {
                         TokenKind::Plus => BinopKind::Add,
+                        TokenKind::Minus => BinopKind::Sub,
+                        TokenKind::Star => BinopKind::Mul,
+                        TokenKind::FSlah => BinopKind::Div,
                         _ => unreachable!(),
                     },
                     rhs,
@@ -240,16 +247,34 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
         }
     }
 
+    fn negate_expr(&mut self) -> Spanned<Expr> {
+        let start = self.peek_range().start();
+        self.expect(TokenKind::Minus, &[]);
+        let expr = self.expr();
+        let end = self.peek_range().end();
+        Spanned {
+            inner: Expr::Negate(Negate { expr }),
+            span: Span {
+                range: TextRange::new(start, end),
+                file_id: self.file_id.clone(),
+            },
+        }
+    }
+
     fn array_expr(&mut self) -> Spanned<Expr> {
         let start = self.peek_range().start();
         let mut exprs = SmallVec::new();
         self.expect(TokenKind::LSquare, &[]); // we checked that this was an LSquare before entering this function, so no recover set needed
         while !self.at(TokenKind::RSquare) && !self.at_end() {
-            let expr = self.expr();
+            exprs.push(self.expr());
             if !self.at(TokenKind::RSquare) {
-                self.expect(TokenKind::Comma, ARRAY_COMMA_RECOVERY_SET);
+                if !self.at(TokenKind::Comma) {
+                    self.error(format!("expected either `,` or `]` in array"));
+                    break;
+                } else {
+                    self.next();
+                }
             }
-            exprs.push(expr);
         }
         self.expect(TokenKind::RSquare, ARRAY_CLOSE_BRACKET_RECOVERY_SET);
         let end = self.peek_range().end();
@@ -302,7 +327,7 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
         self.expect(TokenKind::RCurly, RECORD_CLOSE_BRACKET_RECOVERY_SET);
         let end = self.peek_range().end();
         Spanned {
-            inner: Expr::Record(fields),
+            inner: Expr::Record(Record(fields)),
             span: Span {
                 range: TextRange::new(start, end),
                 file_id: self.file_id.clone(),
@@ -334,6 +359,19 @@ impl<'src, I: Iterator<Item = Token> + Clone> Parser<'src, I> {
                     },
                 },
             }),
+            span: Span {
+                range: TextRange::new(start, end),
+                file_id: self.file_id.clone(),
+            },
+        }
+    }
+
+    fn null_expr(&mut self) -> Spanned<Expr> {
+        let start = self.peek_range().start();
+        self.next();
+        let end = self.peek_range().end();
+        Spanned {
+            inner: Expr::Null,
             span: Span {
                 range: TextRange::new(start, end),
                 file_id: self.file_id.clone(),

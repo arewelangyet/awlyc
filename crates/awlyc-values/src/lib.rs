@@ -2,19 +2,25 @@ use std::{collections::HashMap, path::PathBuf};
 
 use awlyc_error::{Diagnostic, DiagnosticKind, FileId, Span};
 use awlyc_parser::{
-    ast::{Expr, ExprIdx, FnDecl, Spanned},
+    ast::{Binop, BinopKind, Expr, ExprIdx, FnDecl, Spanned},
     Module,
 };
+
+use itertools::Itertools;
 use la_arena::Arena;
+use serde::Deserialize;
 use smol_str::SmolStr;
 use text_size::TextRange;
 
 type ValueResult = Result<AwlycValue, Diagnostic>;
 
-#[derive(Debug)]
+pub mod deserialize;
+
+#[derive(Debug, Deserialize)]
 pub enum AwlycValue {
+    Null,
     String(SmolStr),
-    Int(u64),
+    Int(i64),
     Float(f64),
     Array(Vec<AwlycValue>),
     Record(HashMap<SmolStr, AwlycValue>),
@@ -92,9 +98,25 @@ impl<'a> LoweringCtx<'a> {
                     });
                 }
             }
-            Expr::Int(n) => AwlycValue::Int(*n),
+            Expr::Null => AwlycValue::Null,
+            Expr::Int(n) => AwlycValue::Int((*n).try_into().unwrap()),
+            Expr::Binop(binop) => self.lower_binop_expr(binop, module, substitutions)?,
             Expr::Float(n) => AwlycValue::Float(*n),
             Expr::String(v) => AwlycValue::String(v.clone()),
+            Expr::Negate(n) => {
+                let expr = self.lower_expr(n.expr, module, substitutions)?;
+                match expr {
+                    AwlycValue::Int(n) => AwlycValue::Int(n * -1),
+                    AwlycValue::Float(n) => AwlycValue::Float(n * -1.0),
+                    _ => {
+                        return Err(Diagnostic {
+                            kind: DiagnosticKind::Error,
+                            msg: format!("invalid negation operation"),
+                            span: self.expr_arena[idx].span.clone(),
+                        })
+                    }
+                }
+            }
             Expr::Array(els) => {
                 let mut arr = vec![];
                 for el in els {
@@ -104,7 +126,7 @@ impl<'a> LoweringCtx<'a> {
             }
             Expr::Record(fields) => {
                 let mut record = HashMap::new();
-                for (k, v) in fields.iter() {
+                for (k, v) in fields.0.iter() {
                     record.insert(k.clone(), self.lower_expr(*v, module, substitutions)?);
                 }
                 AwlycValue::Record(record)
@@ -119,7 +141,10 @@ impl<'a> LoweringCtx<'a> {
                 if callee.len() > 2 {
                     return Err(Diagnostic {
                         kind: DiagnosticKind::Error,
-                        msg: format!("unknown function referenced `{}`", path_to_string(callee)),
+                        msg: format!(
+                            "unknown function referenced `{}`",
+                            callee.iter().map(|s| s.to_string()).join(".")
+                        ),
                         span: self.expr_arena[call.callee].span.clone(),
                     });
                 }
@@ -152,9 +177,139 @@ impl<'a> LoweringCtx<'a> {
                     });
                 }
             }
-            _ => todo!(),
+            _ => unreachable!(), // we dont lower if there are Expr::Errors
         };
         Ok(val)
+    }
+
+    fn lower_binop_expr(
+        &self,
+        binop: &Binop,
+        module: &Module,
+        substitutions: Option<&[(SmolStr, ExprIdx)]>,
+    ) -> ValueResult {
+        // TODO: code duplication...
+        match binop.op {
+            BinopKind::Add => self.lower_binop_add(binop, module, substitutions),
+            BinopKind::Sub => self.lower_binop_sub(binop, module, substitutions),
+            BinopKind::Mul => self.lower_binop_mul(binop, module, substitutions),
+            BinopKind::Div => self.lower_binop_div(binop, module, substitutions),
+        }
+    }
+
+    fn lower_binop_add(
+        &self,
+        binop: &Binop,
+        module: &Module,
+        substitutions: Option<&[(SmolStr, ExprIdx)]>,
+    ) -> ValueResult {
+        let lhs_span = &self.expr_arena[binop.lhs].span.clone();
+        let rhs_span = &self.expr_arena[binop.rhs].span.clone();
+        let lhs = self.lower_expr(binop.lhs, module, substitutions)?;
+        let rhs = self.lower_expr(binop.rhs, module, substitutions)?;
+        let result = match (lhs, rhs) {
+            (AwlycValue::Int(a), AwlycValue::Int(b)) => AwlycValue::Int(a + b),
+            (AwlycValue::Float(a), AwlycValue::Float(b)) => AwlycValue::Float(a + b),
+            (AwlycValue::Int(a), AwlycValue::Float(b)) => AwlycValue::Float(a as f64 + b),
+            (AwlycValue::Float(a), AwlycValue::Int(b)) => AwlycValue::Float(a + b as f64),
+            (AwlycValue::String(a), AwlycValue::String(b)) => {
+                AwlycValue::String(SmolStr::from(format!("{}{}", a, b)))
+            }
+            _ => {
+                return Err(Diagnostic {
+                    kind: DiagnosticKind::Error,
+                    msg: format!("invalid addition operands"),
+                    span: Span::combine(&lhs_span, &rhs_span),
+                })
+            }
+        };
+        Ok(result)
+    }
+
+    fn lower_binop_sub(
+        &self,
+        binop: &Binop,
+        module: &Module,
+        substitutions: Option<&[(SmolStr, ExprIdx)]>,
+    ) -> ValueResult {
+        // TODO: should string subtraction be allowed? probably not but ask
+
+        let lhs_span = &self.expr_arena[binop.lhs].span.clone();
+        let rhs_span = &self.expr_arena[binop.rhs].span.clone();
+        let lhs = self.lower_expr(binop.lhs, module, substitutions)?;
+        let rhs = self.lower_expr(binop.rhs, module, substitutions)?;
+        let result = match (lhs, rhs) {
+            (AwlycValue::Int(a), AwlycValue::Int(b)) => AwlycValue::Int(a - b),
+            (AwlycValue::Float(a), AwlycValue::Float(b)) => AwlycValue::Float(a - b),
+            (AwlycValue::Int(a), AwlycValue::Float(b)) => AwlycValue::Float(a as f64 - b),
+            (AwlycValue::Float(a), AwlycValue::Int(b)) => AwlycValue::Float(a - b as f64),
+            _ => {
+                return Err(Diagnostic {
+                    kind: DiagnosticKind::Error,
+                    msg: format!("invalid subtraction operands"),
+                    span: Span::combine(&lhs_span, &rhs_span),
+                })
+            }
+        };
+        Ok(result)
+    }
+
+    fn lower_binop_mul(
+        &self,
+        binop: &Binop,
+        module: &Module,
+        substitutions: Option<&[(SmolStr, ExprIdx)]>,
+    ) -> ValueResult {
+        // TODO: can we do a cursed string * float multiplication
+        // ex: "hello" * 1.5 = "hellohel"
+        let lhs_span = &self.expr_arena[binop.lhs].span.clone();
+        let rhs_span = &self.expr_arena[binop.rhs].span.clone();
+        let lhs = self.lower_expr(binop.lhs, module, substitutions)?;
+        let rhs = self.lower_expr(binop.rhs, module, substitutions)?;
+        let result = match (lhs, rhs) {
+            (AwlycValue::Int(a), AwlycValue::Int(b)) => AwlycValue::Int(a * b),
+            (AwlycValue::Float(a), AwlycValue::Float(b)) => AwlycValue::Float(a * b),
+            (AwlycValue::Int(a), AwlycValue::Float(b)) => AwlycValue::Float(a as f64 * b),
+            (AwlycValue::Float(a), AwlycValue::Int(b)) => AwlycValue::Float(a * b as f64),
+            (AwlycValue::String(a), AwlycValue::Int(n)) => {
+                AwlycValue::String(SmolStr::from(a.repeat(n as usize)))
+            }
+            _ => {
+                // TODO: since we have multiple call sites each with potentially different operand types, this err msg is not very useful. Add label with span of callsite so user knows which one is wrong
+                return Err(Diagnostic {
+                    kind: DiagnosticKind::Error,
+                    msg: format!("invalid multiplication operands"),
+                    span: Span::combine(&lhs_span, &rhs_span),
+                });
+            }
+        };
+        Ok(result)
+    }
+
+    fn lower_binop_div(
+        &self,
+        binop: &Binop,
+        module: &Module,
+        substitutions: Option<&[(SmolStr, ExprIdx)]>,
+    ) -> ValueResult {
+        let lhs_span = &self.expr_arena[binop.lhs].span.clone();
+        let rhs_span = &self.expr_arena[binop.rhs].span.clone();
+        let lhs = self.lower_expr(binop.lhs, module, substitutions)?;
+        let rhs = self.lower_expr(binop.rhs, module, substitutions)?;
+        let result = match (lhs, rhs) {
+            (AwlycValue::Int(a), AwlycValue::Int(b)) => AwlycValue::Int(a / b),
+            (AwlycValue::Float(a), AwlycValue::Float(b)) => AwlycValue::Float(a / b),
+            (AwlycValue::Int(a), AwlycValue::Float(b)) => AwlycValue::Float(a as f64 / b),
+            (AwlycValue::Float(a), AwlycValue::Int(b)) => AwlycValue::Float(a / b as f64),
+            _ => {
+                return Err(Diagnostic {
+                    kind: DiagnosticKind::Error,
+                    msg: format!("invalid division operands"),
+                    span: Span::combine(&lhs_span, &rhs_span),
+                })
+            }
+        };
+        Ok(result)
     }
 
     fn find_function_in_module(
@@ -202,24 +357,12 @@ impl<'a> LoweringCtx<'a> {
     }
 }
 
-fn path_to_string(path: &[Spanned<SmolStr>]) -> String {
-    path.iter()
-        .map(|s| s.to_string())
-        .reduce(|acc, s| format!("{}.{}", acc, s))
-        .unwrap()
-}
-
 pub fn lower(
     entry: &str,
     modules: &HashMap<FileId, Module>,
     expr_arena: &Arena<Spanned<Expr>>,
-) -> ValueResult {
-    // let entry_file_id = FileId(SmolStr::from(
-    // std::fs::canonicalize(entry).unwrap().to_str().unwrap(),
-    // ));
+) -> Result<AwlycValue, Diagnostic> {
     let entry = std::fs::canonicalize(entry).unwrap();
     let ctx = LoweringCtx::new(&entry, modules, expr_arena);
-    let res = ctx.lower();
-    println!("{:#?}", res);
-    res
+    ctx.lower()
 }

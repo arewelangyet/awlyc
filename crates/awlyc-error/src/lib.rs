@@ -1,5 +1,3 @@
-// #![warn(missing_docs)]
-
 use ariadne::{sources, Color, Label, Report, ReportKind};
 use smol_str::SmolStr;
 use std::fmt;
@@ -24,6 +22,18 @@ pub struct Span {
     pub range: TextRange,
     /// File the span is in
     pub file_id: FileId,
+}
+
+impl Span {
+    /// Combine two spans in the same file
+    /// a must come before b
+    pub fn combine(a: &Self, b: &Self) -> Self {
+        assert!(a.range.start() < b.range.end());
+        Span {
+            range: TextRange::new(a.range.start(), b.range.end()),
+            file_id: a.file_id.clone(),
+        }
+    }
 }
 
 impl ariadne::Span for Span {
@@ -84,6 +94,31 @@ impl Diagnostic {
                 .with_color(Color::Blue),
         );
         report.finish()
+    }
+}
+
+impl fmt::Display for Diagnostic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "err")
+    }
+}
+
+impl std::error::Error for Diagnostic {}
+
+// TODO: huh?
+impl serde::de::Error for Diagnostic {
+    fn custom<T>(msg: T) -> Self
+    where
+        T: fmt::Display,
+    {
+        Diagnostic {
+            kind: DiagnosticKind::Error,
+            msg: msg.to_string(),
+            span: Span {
+                range: TextRange::new(0.into(), 0.into()),
+                file_id: FileId(SmolStr::from("err")),
+            },
+        }
     }
 }
 

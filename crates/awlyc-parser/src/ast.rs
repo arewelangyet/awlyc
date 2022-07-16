@@ -28,11 +28,16 @@ pub enum Expr {
     Float(f64),
     String(SmolStr),
     Array(SmallVec<[ExprIdx; 2]>),
-    Record(HashMap<SmolStr, ExprIdx>),
+    Record(Record),
     Binop(Binop),
+    Negate(Negate),
     Call(Call),
+    Null,
     Error,
 }
+
+#[derive(Debug)]
+pub struct Record(pub HashMap<SmolStr, ExprIdx>);
 
 #[derive(Debug)]
 pub struct Call {
@@ -41,8 +46,16 @@ pub struct Call {
 }
 
 #[derive(Debug)]
+pub struct Negate {
+    pub expr: ExprIdx,
+}
+
+#[derive(Debug)]
 pub enum BinopKind {
     Add,
+    Sub,
+    Mul,
+    Div,
 }
 
 #[derive(Debug)]
